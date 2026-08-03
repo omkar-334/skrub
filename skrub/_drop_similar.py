@@ -15,6 +15,7 @@ from sklearn.utils.validation import check_is_fitted
 from . import _dataframe as sbd
 from . import selectors as s
 from ._base import SkrubBaseEstimator
+from ._check_input import CheckInputDataFrame
 from ._column_associations import column_associations
 from ._dataframe._common import raise_dispatch_unregistered_type
 from ._dispatch import dispatch
@@ -43,6 +44,11 @@ class DropSimilar(TransformerMixin, SkrubBaseEstimator):
     This is done by computing Cramér's V between every possible two columns,
     and sorting these couples in descending order. Then, for every association above
     the given threshold, one of the two columns is dropped.
+
+    The input dataframe is checked before the associations are computed: column
+    names that are not strings are cast to strings, and a suffix is added to
+    duplicated names so that they become unique. A warning is emitted when
+    either of these renamings happens.
 
     Parameters
     ----------
@@ -139,6 +145,10 @@ class DropSimilar(TransformerMixin, SkrubBaseEstimator):
                 f"Threshold must be a number between 0 and 1, got {self.threshold!r}."
             )
 
+        # ensure the column names are unique strings before selecting on them
+        self._check_input = CheckInputDataFrame()
+        X = self._check_input.fit_transform(X)
+
         if sbd.is_polars(X):
             try:
                 import pyarrow  # noqa F401
@@ -166,4 +176,5 @@ class DropSimilar(TransformerMixin, SkrubBaseEstimator):
 
     def transform(self, X):
         check_is_fitted(self)
+        X = self._check_input.transform(X)
         return self._dropper.transform(X)

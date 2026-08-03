@@ -1,6 +1,8 @@
 import builtins
 import sys
 
+import numpy as np
+import pandas as pd
 import pytest
 
 from skrub import _dataframe as sbd
@@ -12,60 +14,61 @@ _TYPE_ERROR = "Threshold must be a number"
 _PYARROW_ERROR = "DropSimilar requires the Pyarrow package to run on Polars dataframes."
 
 
+_ASSOCIATION_DATA = {
+    "letters": [
+        "a",
+        "b",
+        "c",
+        "a",
+        "b",
+        "c",
+        "a",
+        "b",
+        "c",
+        "a",
+    ],
+    "ranks": [
+        "first",
+        "second",
+        "third",
+        "fourth",
+        "second",
+        "third",
+        "fourth",
+        "first",
+        "second",
+        "first",
+    ],
+    "words": [
+        "None",
+        "None",
+        "None",
+        "Other",
+        "None",
+        "None",
+        "None",
+        "None",
+        "None",
+        "None",
+    ],
+    "more_words": [
+        "None",
+        "None",
+        "None",
+        "Other",
+        "None",
+        "None",
+        "None",
+        "None",
+        "None",
+        "None",
+    ],
+}
+
+
 @pytest.fixture
 def table_with_associations(df_module):
-    return df_module.make_dataframe(
-        {
-            "letters": [
-                "a",
-                "b",
-                "c",
-                "a",
-                "b",
-                "c",
-                "a",
-                "b",
-                "c",
-                "a",
-            ],
-            "ranks": [
-                "first",
-                "second",
-                "third",
-                "fourth",
-                "second",
-                "third",
-                "fourth",
-                "first",
-                "second",
-                "first",
-            ],
-            "words": [
-                "None",
-                "None",
-                "None",
-                "Other",
-                "None",
-                "None",
-                "None",
-                "None",
-                "None",
-                "None",
-            ],
-            "more_words": [
-                "None",
-                "None",
-                "None",
-                "Other",
-                "None",
-                "None",
-                "None",
-                "None",
-                "None",
-                "None",
-            ],
-        }
-    )
+    return df_module.make_dataframe(_ASSOCIATION_DATA)
 
 
 @skip_polars_installed_without_pyarrow
@@ -96,6 +99,32 @@ def test_fit_transform(table_with_associations):
     fit_transform_columns = sbd.column_names(res_fit_transform)
     transform_columns = sbd.column_names(res_transform)
     assert fit_transform_columns == transform_columns
+
+
+def test_column_names_to_unique_strings():
+    """Column names are cast to strings and duplicates get a suffix.
+
+    Only pandas is tested here, polars column names are always unique strings.
+    Such names used to break the column selection, see #2186.
+    """
+    df = pd.DataFrame(_ASSOCIATION_DATA)
+    df.columns = [0, "ranks", "words", "words"]
+    ds = DropSimilar()
+    with pytest.warns(UserWarning, match="Found duplicated column names"):
+        out = ds.fit_transform(df)
+    out_names = sbd.column_names(out)
+    assert out_names[:2] == ["0", "ranks"]
+    assert len(out_names) == 3
+    assert ds.get_feature_names_out() == out_names
+    assert sbd.column_names(ds.transform(df)) == out_names
+
+
+def test_numpy_array():
+    """A 2d numpy array is converted to a dataframe with string column names."""
+    ds = DropSimilar()
+    out = ds.fit_transform(np.eye(3))
+    assert sbd.is_pandas(out)
+    assert sbd.column_names(out) == ds.get_feature_names_out()
 
 
 def test_filter_associations():

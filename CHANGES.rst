@@ -50,6 +50,11 @@ Changes
 
 Bugfixes
 --------
+- :class:`DropSimilar` failed on dataframes whose column names were not unique
+  strings, for example a pandas dataframe with integer column names. The input
+  is now checked and its column names are cast to strings and deduplicated, as
+  is already done by :class:`TableVectorizer`.
+  :pr:`2241` by :user:`Omkar Kabde <omkar-334>`.
 - The parallel coordinate plot created by :meth:`ParamSearch.show_results` could
   have incorrect tick labels in some cases. This has been fixed in :pr:`2215` by
   :user:`Jérôme Dockès <jeromedockes>`.
